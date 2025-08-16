@@ -1,0 +1,11 @@
+version: "3.9"
+services:
+  edge:
+    build: .
+    image: mvp-edge:latest
+    ports:
+      - "80:80"  # CDN(TLS終端)→80
+    environment:
+      PROXY_READ_TIMEOUT: "300"
+      PROXY_SEND_TIMEOUT: "300"
+    restart: unless-stopped
