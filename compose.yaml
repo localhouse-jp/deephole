@@ -2,7 +2,7 @@ services:
   edge:
     build: .
     ports:
-      - "80:80"
+      - "8080:80"
     environment:
       PROXY_READ_TIMEOUT: "300"
       PROXY_SEND_TIMEOUT: "300"
