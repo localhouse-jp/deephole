@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 import sys, base64, ipaddress, struct
 
-USAGE = """\
-Usage:
+USAGE = """Usage:
   id32.py enc <IPv4:Port>   # 例: id32.py enc 192.168.11.3:3000
   id32.py dec <code>        # 例: id32.py dec f4vh6tqv64
 Note: 6 bytes (IPv4 4B + Port 2B) -> Base32(lower, no padding). Typical length = 10 chars.
