@@ -1,0 +1,69 @@
+local function b32decode_nopad_lower_to_bytes(input)
+    -- RFC4648 Base32（小文字・ノーパディング）。A–Z/2–7のみ許容（小文字へ正規化）
+    if not input or input == "" then return nil, "empty" end
+    local bit = require("bit")
+    local alpha = "abcdefghijklmnopqrstuvwxyz234567"
+    local map = {}
+    for i = 1, #alpha do
+        map[alpha:sub(i,i)] = i - 1
+    end
+    input = input:gsub("=", ""):lower()
+
+    local bits, val = 0, 0
+    local out = {}
+    for i = 1, #input do
+        local c = input:sub(i,i)
+        local v = map[c]
+        if v == nil then
+            return nil, "invalid-char:" .. c
+        end
+        val = bit.bor(bit.lshift(val, 5), v)
+        bits = bits + 5
+        if bits >= 8 then
+            bits = bits - 8
+            local byte = bit.band(bit.rshift(val, bits), 0xFF)
+            out[#out+1] = string.char(byte)
+            val = bit.band(val, bit.lshift(1, bits) - 1)
+        end
+    end
+    return table.concat(out)
+end
+
+local function valid_ipv4(a,b,c,d)
+    a,b,c,d = tonumber(a), tonumber(b), tonumber(c), tonumber(d)
+    if not a or not b or not c or not d then return false end
+    return a>=0 and a<=255 and b>=0 and b<=255 and c>=0 and c<=255 and d>=0 and d<=255
+end
+
+-- 1) ホスト左端ラベルが短縮ID
+local host = ngx.var.host or ""
+local code = host:match("^([^.]+)%.")
+if not code then
+    return ngx.exit(ngx.HTTP_BAD_REQUEST)
+end
+
+-- 2) Base32復号（ノーパディング）
+local raw, err = b32decode_nopad_lower_to_bytes(code)
+if not raw then
+    ngx.log(ngx.WARN, "b32 decode error: ", err)
+    return ngx.exit(ngx.HTTP_NOT_FOUND)
+end
+
+-- 3) 6バイト固定: [0..3]=IPv4, [4..5]=Port(be)
+if #raw ~= 6 then
+    ngx.log(ngx.WARN, "decoded length invalid: ", #raw)
+    return ngx.exit(ngx.HTTP_BAD_REQUEST)
+end
+local b1, b2, b3, b4, p1, p2 = raw:byte(1,6)
+local ip = string.format("%d.%d.%d.%d", b1, b2, b3, b4)
+if not valid_ipv4(b1,b2,b3,b4) then
+    return ngx.exit(ngx.HTTP_BAD_REQUEST)
+end
+local bit = require("bit")
+local port = bit.bor(bit.lshift(p1, 8), p2)
+if port < 1 or port > 65535 then
+    return ngx.exit(ngx.HTTP_BAD_REQUEST)
+end
+
+ngx.var.upstream_target = ip .. ":" .. tostring(port)
+ngx.req.set_header("X-Edge-Target", ngx.var.upstream_target)
